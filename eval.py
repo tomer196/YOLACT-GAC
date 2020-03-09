@@ -29,6 +29,10 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import cv2
 
+from skimage import data, img_as_float
+from skimage.segmentation import morphological_chan_vese
+from skimage.color import rgb2gray
+
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
@@ -43,6 +47,8 @@ def parse_args(argv=None):
     parser.add_argument('--trained_model',
                         default='weights/ssd300_mAP_77.43_v2.pth', type=str,
                         help='Trained state_dict file path to open. If "interrupt", this will open the interrupt file.')
+    parser.add_argument('--GAC', dest='GAC', action='store_true',
+                        help='Add GAC refimment to the mask.')
     parser.add_argument('--top_k', default=5, type=int,
                         help='Further restrict the number of predictions to parse')
     parser.add_argument('--cuda', default=True, type=str2bool,
@@ -401,6 +407,23 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
 
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
+        ### my ###
+        if args.GAC:
+            # import matplotlib.pyplot as plt
+            # plt.imsave('out_my/img.png', img)
+            img_gray = img_as_float(rgb2gray(img))
+            for i in range(masks.shape[0]):
+                new_mask = morphological_chan_vese(img_gray, 3, init_level_set=masks[i,:,:].cpu().numpy(), smoothing=3)
+                # plt.imsave(f'out_my/orig{i}.png', masks[i,:,:].cpu().numpy())
+                # plt.imsave(f'out_my/new{i}.png', new_mask)
+                # plt.imshow(img)
+                # plt.imshow(new_mask, cmap='jet', alpha=0.5)
+                # plt.savefig(f'out_my/img_new{i}.png')
+                # plt.imshow(img)
+                # plt.imshow(masks[i,:,:].cpu().numpy(), cmap='jet', alpha=0.5)
+                # plt.savefig(f'out_my/img_orig{i}.png')
+                masks[i, :, :] = torch.tensor(new_mask).cuda()
+        ### my ###
 
         if classes.size(0) == 0:
             return
@@ -933,7 +956,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             timer.reset()
 
             with timer.env('Load Data'):
-                img, gt, gt_masks, h, w, num_crowd = dataset.pull_item(image_idx)
+                img, gt, gt_masks, h, w, num_crowd, orig_img = dataset.pull_item(image_idx)
 
                 # Test flag, do not upvote
                 if cfg.mask_proto_debug:
@@ -953,7 +976,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
             elif args.benchmark:
                 prep_benchmark(preds, h, w)
             else:
-                prep_metrics(ap_data, preds, img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
+                prep_metrics(ap_data, preds, orig_img, gt, gt_masks, h, w, num_crowd, dataset.ids[image_idx], detections)
             
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.

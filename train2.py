@@ -3,7 +3,7 @@ from utils.augmentations import SSDAugmentation, BaseTransform
 from utils.functions import MovingAverage, SavePath
 from utils.logger import Log
 from utils import timer
-from layers.modules import MultiBoxLoss
+from layers.modules.multibox_loss2 import MultiBoxLoss
 from yolact import Yolact
 import os
 import sys
@@ -20,6 +20,10 @@ import torch.utils.data as data
 import numpy as np
 import argparse
 import datetime
+# import matplotlib
+# print(matplotlib.get_backend())
+# matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 
 # Oof
 import eval as eval_script
@@ -28,9 +32,95 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 
+from scipy.ndimage import distance_transform_edt as distance
+def one_hot2dist(seg: np.ndarray) -> np.ndarray:
+    # assert one_hot(torch.Tensor(seg), axis=0)
+    C: int = len(seg)
+
+    res = np.zeros_like(seg).astype(np.float32)
+    for c in range(C):
+        posmask = seg[c].astype(np.bool)
+
+        if posmask.any():
+            negmask = ~posmask
+            # neg_dist = distance(negmask) * negmask
+            # pos_dit = (distance(posmask)-1) * posmask
+            res[c] = - distance(negmask) * negmask - (distance(posmask) - 1) * posmask
+    return res
+
+def detection_collate2(batch):
+    """Custom collate fn for dealing with batches of images that have a different
+    number of associated object annotations (bounding boxes).
+
+    Arguments:
+        batch: (tuple) A tuple of tensor images and (lists of annotations, masks)
+
+    Return:
+        A tuple containing:
+            1) (tensor) batch of images stacked on their 0 dim
+            2) (list<tensor>, list<tensor>, list<int>) annotations for a given image are stacked
+                on 0 dim. The output gt is a tuple of annotations and masks.
+    """
+    targets = []
+    imgs = []
+    masks = []
+    num_crowds = []
+    dist_maps = []
+
+    for sample in batch:
+        imgs.append(sample[0])
+        targets.append(torch.FloatTensor(sample[1][0]))
+        masks.append(torch.FloatTensor(sample[1][1]))
+        num_crowds.append(sample[1][2])
+        dist_maps.append(torch.FloatTensor(one_hot2dist(sample[1][1])))
+
+    return imgs, (targets, masks, num_crowds, dist_maps)
+
+
+def enforce_size(img, targets, masks, num_crowds, dist_maps, new_w, new_h):
+    """ Ensures that the image is the given size without distorting aspect ratio. """
+    with torch.no_grad():
+        _, h, w = img.size()
+
+        if h == new_h and w == new_w:
+            return img, targets, masks, num_crowds, dist_maps
+
+        # Resize the image so that it fits within new_w, new_h
+        w_prime = new_w
+        h_prime = h * new_w / w
+
+        if h_prime > new_h:
+            w_prime *= new_h / h_prime
+            h_prime = new_h
+
+        w_prime = int(w_prime)
+        h_prime = int(h_prime)
+
+        # Do all the resizing
+        img = F.interpolate(img.unsqueeze(0), (h_prime, w_prime), mode='bilinear', align_corners=False)
+        img.squeeze_(0)
+
+        # Act like each object is a color channel
+        masks = F.interpolate(masks.unsqueeze(0), (h_prime, w_prime), mode='bilinear', align_corners=False)
+        masks.squeeze_(0)
+        dist_maps = F.interpolate(dist_maps.unsqueeze(0), (h_prime, w_prime), mode='bilinear', align_corners=False)
+        dist_maps.squeeze_(0)
+
+        # Scale bounding boxes (this will put them in the top left corner in the case of padding)
+        targets[:, [0, 2]] *= (w_prime / new_w)
+        targets[:, [1, 3]] *= (h_prime / new_h)
+
+        # Finally, pad everything to be the new_w, new_h
+        pad_dims = (0, new_w - w_prime, 0, new_h - h_prime)
+        img = F.pad(img, pad_dims, mode='constant', value=0)
+        masks = F.pad(masks, pad_dims, mode='constant', value=0)
+        dist_maps = F.pad(dist_maps, pad_dims, mode='constant', value=0)
+
+        return img, targets, masks, num_crowds, dist_maps
+
 parser = argparse.ArgumentParser(
     description='Yolact Training Script')
-parser.add_argument('--batch_size', default=8, type=int,
+parser.add_argument('--batch_size', default=28, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from. If this is "interrupt"'\
@@ -117,7 +207,7 @@ if args.batch_size // torch.cuda.device_count() < 6:
         print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
-loss_types = ['B', 'C', 'M', 'P', 'D', 'E', 'S', 'I']
+loss_types = ['B', 'C', 'M', 'MS', 'P', 'D', 'E', 'S', 'I']
 
 if torch.cuda.is_available():
     if args.cuda:
@@ -141,9 +231,9 @@ class NetLoss(nn.Module):
         self.net = net
         self.criterion = criterion
     
-    def forward(self, images, targets, masks, num_crowds):
+    def forward(self, images, targets, masks, num_crowds, dist_maps):
         preds = self.net(images)
-        losses = self.criterion(self.net, preds, targets, masks, num_crowds)
+        losses = self.criterion(self.net, preds, targets, masks, num_crowds, dist_maps)
         return losses
 
 class CustomDataParallel(nn.DataParallel):
@@ -189,7 +279,7 @@ def train():
     net.train()
 
     if args.log:
-        log = Log(cfg.name, args.log_folder, dict(args._get_kwargs()),
+        log = Log(cfg.name + '_my1', args.log_folder, dict(args._get_kwargs()),
             overwrite=(args.resume is None), log_gpu_stats=args.log_gpu)
 
     # I don't use the timer during training (I use a different timing method).
@@ -247,8 +337,8 @@ def train():
     step_index = 0
 
     data_loader = data.DataLoader(dataset, args.batch_size,
-                                  num_workers=0*args.num_workers,
-                                  shuffle=True, collate_fn=detection_collate,
+                                  num_workers= 40, #0*args.num_workers,
+                                  shuffle=True, collate_fn=detection_collate2,
                                   pin_memory=True)
     
     
@@ -404,7 +494,7 @@ def prepare_data(datum, devices:list=None, allocation:list=None):
             allocation = [args.batch_size // len(devices)] * (len(devices) - 1)
             allocation.append(args.batch_size - sum(allocation)) # The rest might need more/less
         
-        images, (targets, masks, num_crowds) = datum
+        images, (targets, masks, num_crowds, dist_maps) = datum
 
         cur_idx = 0
         for device, alloc in zip(devices, allocation):
@@ -412,29 +502,31 @@ def prepare_data(datum, devices:list=None, allocation:list=None):
                 images[cur_idx]  = gradinator(images[cur_idx].to(device))
                 targets[cur_idx] = gradinator(targets[cur_idx].to(device))
                 masks[cur_idx]   = gradinator(masks[cur_idx].to(device))
+                dist_maps[cur_idx]   = gradinator(dist_maps[cur_idx].to(device))
                 cur_idx += 1
 
         if cfg.preserve_aspect_ratio:
             # Choose a random size from the batch
             _, h, w = images[random.randint(0, len(images)-1)].size()
 
-            for idx, (image, target, mask, num_crowd) in enumerate(zip(images, targets, masks, num_crowds)):
-                images[idx], targets[idx], masks[idx], num_crowds[idx] \
-                    = enforce_size(image, target, mask, num_crowd, w, h)
+            for idx, (image, target, mask, num_crowd) in enumerate(zip(images, targets, masks, num_crowds, dist_maps)):
+                images[idx], targets[idx], masks[idx], num_crowds[idx], dist_maps[idx] \
+                    = enforce_size(image, target, mask, num_crowd, dist_maps, w, h)
         
         cur_idx = 0
-        split_images, split_targets, split_masks, split_numcrowds \
-            = [[None for alloc in allocation] for _ in range(4)]
+        split_images, split_targets, split_masks, split_numcrowds, split_dist_maps \
+            = [[None for alloc in allocation] for _ in range(5)]
 
         for device_idx, alloc in enumerate(allocation):
             split_images[device_idx]    = torch.stack(images[cur_idx:cur_idx+alloc], dim=0)
             split_targets[device_idx]   = targets[cur_idx:cur_idx+alloc]
             split_masks[device_idx]     = masks[cur_idx:cur_idx+alloc]
             split_numcrowds[device_idx] = num_crowds[cur_idx:cur_idx+alloc]
+            split_dist_maps[device_idx]     = dist_maps[cur_idx:cur_idx+alloc]
 
             cur_idx += alloc
 
-        return split_images, split_targets, split_masks, split_numcrowds
+        return split_images, split_targets, split_masks, split_numcrowds, split_dist_maps
 
 def no_inf_mean(x:torch.Tensor):
     """
@@ -458,7 +550,7 @@ def compute_validation_loss(net, data_loader, criterion):
         # Don't switch to eval mode because we want to get losses
         iterations = 0
         for datum in data_loader:
-            images, targets, masks, num_crowds = prepare_data(datum)
+            images, targets, masks, num_crowds, dist_maps = prepare_data(datum)
             out = net(images)
 
             wrapper = ScatterWrapper(targets, masks, num_crowds)
