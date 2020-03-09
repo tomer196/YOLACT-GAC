@@ -1,50 +1,20 @@
-# **Y**ou **O**nly **L**ook **A**t **C**oefficien**T**s
-```
-    ██╗   ██╗ ██████╗ ██╗      █████╗  ██████╗████████╗
-    ╚██╗ ██╔╝██╔═══██╗██║     ██╔══██╗██╔════╝╚══██╔══╝
-     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║   
-      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║   
-       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║   
-       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
-```
 
-A simple, fully convolutional model for real-time instance segmentation. This is the code for our papers:
  - [YOLACT: Real-time Instance Segmentation](https://arxiv.org/abs/1904.02689)
  - [YOLACT++: Better Real-time Instance Segmentation](https://arxiv.org/abs/1912.06218)
-
-#### YOLACT++ (v1.2) released! ([Changelog](CHANGELOG.md))
-YOLACT++'s resnet50 model runs at 33.5 fps on a Titan Xp and achieves 34.1 mAP on COCO's `test-dev` (check out our journal paper [here](https://arxiv.org/abs/1912.06218)).
-
-In order to use YOLACT++, make sure you compile the DCNv2 code. (See [Installation](https://github.com/dbolya/yolact#installation))
-
-#### For a real-time demo, check out our ICCV video:
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/0pMfmo8qfpQ/0.jpg)](https://www.youtube.com/watch?v=0pMfmo8qfpQ)
-
-Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on COCO's `test-dev`):
-
-![Example 0](data/yolact_example_0.png)
-
-![Example 1](data/yolact_example_1.png)
-
-![Example 2](data/yolact_example_2.png)
 
 # Installation
  - Clone this repository and enter it:
    ```Shell
-   git clone https://github.com/dbolya/yolact.git
-   cd yolact
+   git clone https://github.com/tomer196/YOLACT-GAC.git
+   cd YOLACT-GAC
    ```
  - Set up the environment using one of the following methods:
-   - Using [Anaconda](https://www.anaconda.com/distribution/)
-     - Run `conda env create -f environment.yml`
-   - Manually with pip
      - Set up a Python3 environment (e.g., using virtenv).
-     - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
-     - Install some other packages:
+     - Install packages:
        ```Shell
        # Cython needs to be installed before pycocotools
-       pip install cython
-       pip install opencv-python pillow pycocotools matplotlib 
+       pip install Cython==0.29.15
+       pip install -r requirments.txt 
        ```
  - If you'd like to train YOLACT, download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
@@ -54,13 +24,6 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
    ```Shell
    sh data/scripts/COCO_test.sh
    ```
- - If you want to use YOLACT++, compile deformable convolutional layers (from [DCNv2](https://github.com/CharlesShang/DCNv2/tree/pytorch_1.0)).
-   Make sure you have the latest CUDA toolkit installed from [NVidia's Website](https://developer.nvidia.com/cuda-toolkit).
-   ```Shell
-   cd external/DCNv2
-   python setup.py build develop
-   ```
-
 
 # Evaluation
 Here are our YOLACT models (released on April 5th, 2019) along with their FPS on a Titan Xp and mAP on `test-dev`:
@@ -96,44 +59,6 @@ python run_coco_eval.py
 # To output a coco json file for test-dev, make sure you have test-dev downloaded from above and go
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --output_coco_json --dataset=coco2017_testdev_dataset
 ```
-## Qualitative Results on COCO
-```Shell
-# Display qualitative results on COCO. From here on I'll use a confidence threshold of 0.15.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --display
-```
-## Benchmarking on COCO
-```Shell
-# Run just the raw model on the first 1k images of the validation set
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --benchmark --max_images=1000
-```
-## Images
-```Shell
-# Display qualitative results on the specified image.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=my_image.png
-
-# Process an image and save it to another file.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=input_image.png:output_image.png
-
-# Process a whole folder of images.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --images=path/to/input/folder:path/to/output/folder
-```
-## Video
-```Shell
-# Display a video in real-time. "--video_multiframe" will process that many frames at once for improved performance.
-# If you want, use "--display_fps" to draw the FPS directly on the frame.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=my_video.mp4
-
-# Display a webcam feed in real-time. If you have multiple webcams pass the index of the webcam you want instead of 0.
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=0
-
-# Process a video and save it to another file. This uses the same pipeline as the ones above now, so it's fast!
-python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=input_video.mp4:output_video.mp4
-```
-As you can tell, `eval.py` can do a ton of stuff. Run the `--help` command to see everything it can do.
-```Shell
-python eval.py --help
-```
-
 
 # Training
 By default, we train on COCO. Make sure to download the entire dataset using the commands above.
@@ -157,90 +82,3 @@ python train.py --config=yolact_base_config --resume=weights/yolact_base_10_3210
 # Use the help option to see a description of all available command line arguments
 python train.py --help
 ```
-
-## Multi-GPU Support
-YOLACT now supports multiple GPUs seamlessly during training:
-
- - Before running any of the scripts, run: `export CUDA_VISIBLE_DEVICES=[gpus]`
-   - Where you should replace [gpus] with a comma separated list of the index of each GPU you want to use (e.g., 0,1,2,3).
-   - You should still do this if only using 1 GPU.
-   - You can check the indices of your GPUs with `nvidia-smi`.
- - Then, simply set the batch size to `8*num_gpus` with the training commands above. The training script will automatically scale the hyperparameters to the right values.
-   - If you have memory to spare you can increase the batch size further, but keep it a multiple of the number of GPUs you're using.
-   - If you want to allocate the images per GPU specific for different GPUs, you can use `--batch_alloc=[alloc]` where [alloc] is a comma seprated list containing the number of images on each GPU. This must sum to `batch_size`.
-
-## Logging
-YOLACT now logs training and validation information by default. You can disable this with `--no_log`. A guide on how to visualize these logs is coming soon, but now you can look at `LogVizualizer` in `utils/logger.py` for help.
-
-## Pascal SBD
-We also include a config for training on Pascal SBD annotations (for rapid experimentation or comparing with other methods). To train on Pascal SBD, proceed with the following steps:
- 1. Download the dataset from [here](http://home.bharathh.info/pubs/codes/SBD/download.html). It's the first link in the top "Overview" section (and the file is called `benchmark.tgz`).
- 2. Extract the dataset somewhere. In the dataset there should be a folder called `dataset/img`. Create the directory `./data/sbd` (where `.` is YOLACT's root) and copy `dataset/img` to `./data/sbd/img`.
- 4. Download the COCO-style annotations from [here](https://drive.google.com/open?id=1ExrRSPVctHW8Nxrn0SofU1lVhK5Wn0_S).
- 5. Extract the annotations into `./data/sbd/`.
- 6. Now you can train using `--config=yolact_resnet50_pascal_config`. Check that config to see how to extend it to other models.
-
-I will automate this all with a script soon, don't worry. Also, if you want the script I used to convert the annotations, I put it in `./scripts/convert_sbd.py`, but you'll have to check how it works to be able to use it because I don't actually remember at this point.
-
-If you want to verify our results, you can download our `yolact_resnet50_pascal_config` weights from [here](https://drive.google.com/open?id=1yLVwtkRtNxyl0kxeMCtPXJsXFFyc_FHe). This model should get 72.3 mask AP_50 and 56.2 mask AP_70. Note that the "all" AP isn't the same as the "vol" AP reported in others papers for pascal (they use an averages of the thresholds from `0.1 - 0.9` in increments of `0.1` instead of what COCO uses).
-
-## Custom Datasets
-You can also train on your own dataset by following these steps:
- - Create a COCO-style Object Detection JSON annotation file for your dataset. The specification for this can be found [here](http://cocodataset.org/#format-data). Note that we don't use some fields, so the following may be omitted:
-   - `info`
-   - `liscense`
-   - Under `image`: `license, flickr_url, coco_url, date_captured`
-   - `categories` (we use our own format for categories, see below)
- - Create a definition for your dataset under `dataset_base` in `data/config.py` (see the comments in `dataset_base` for an explanation of each field):
-```Python
-my_custom_dataset = dataset_base.copy({
-    'name': 'My Dataset',
-
-    'train_images': 'path_to_training_images',
-    'train_info':   'path_to_training_annotation',
-
-    'valid_images': 'path_to_validation_images',
-    'valid_info':   'path_to_validation_annotation',
-
-    'has_gt': True,
-    'class_names': ('my_class_id_1', 'my_class_id_2', 'my_class_id_3', ...)
-})
-```
- - A couple things to note:
-   - Class IDs in the annotation file should start at 1 and increase sequentially on the order of `class_names`. If this isn't the case for your annotation file (like in COCO), see the field `label_map` in `dataset_base`.
-   - If you do not want to create a validation split, use the same image path and annotations file for validation. By default (see `python train.py --help`), `train.py` will output validation mAP for the first 5000 images in the dataset every 2 epochs.
- - Finally, in `yolact_base_config` in the same file, change the value for `'dataset'` to `'my_custom_dataset'` or whatever you named the config object above. Then you can use any of the training commands in the previous section.
-
-#### Creating a Custom Dataset from Scratch
-See [this nice post by @Amit12690](https://github.com/dbolya/yolact/issues/70#issuecomment-504283008) for tips on how to annotate a custom dataset and prepare it for use with YOLACT.
-
-
-
-
-# Citation
-If you use YOLACT or this code base in your work, please cite
-```
-@inproceedings{yolact-iccv2019,
-  author    = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
-  title     = {YOLACT: {Real-time} Instance Segmentation},
-  booktitle = {ICCV},
-  year      = {2019},
-}
-```
-
-For YOLACT++, please cite
-```
-@misc{yolact-plus-arxiv2019,
-  title         = {YOLACT++: Better Real-time Instance Segmentation},
-  author        = {Daniel Bolya and Chong Zhou and Fanyi Xiao and Yong Jae Lee},
-  year          = {2019},
-  eprint        = {1912.06218},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CV}
-}
-```
-
-
-
-# Contact
-For questions about our paper or code, please contact [Daniel Bolya](mailto:dbolya@ucdavis.edu).
