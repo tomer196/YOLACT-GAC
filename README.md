@@ -3,9 +3,9 @@
 based on the code from [YOLACT: Real-time Instance Segmentation](https://arxiv.org/abs/1904.02689)
 
 # Changes from the original YOLACT code
-eval.py, adding the ability to do refinement with GAC, differ only in lines 411-426
-train_GAC_loss.py, copy of train.py with the GAC loss, lines 34-120 calaulate the distance maps and changing the data loader
-layers/modules/multibox_loss2.py, copy of multibox_loss.py with the added GAC_loss in lines 34-120
+eval.py lines 411-426, adding the ability to do refinement with GAC  
+train_GAC_loss.py lines 34-120, copy of train.py with the GAC loss, calaulate the distance maps and changing the data loader  
+layers/modules/multibox_loss2.py lines 34-120, copy of multibox_loss.py with the added GAC loss  
 few more minor changes to pass the distance maps to the loss module
 
 # Installation
@@ -52,10 +52,10 @@ To evalute the model, put the corresponding weights file in the `./weights` dire
 
 ## Quantitative Results on COCO
 ```Shell
-# Quantitatively evaluate a the original train model. 
+# Quantitatively evaluate the original trained model. 
 python eval.py --trained_model=weights/yolact_resnet50_54_800000.pth
 
-# Quantitatively evaluate a the my train model with GAC loss. 
+# Quantitatively evaluate my trained model with GAC loss. 
 python eval.py --trained_model=weights/yolact_resnet50_GAC.pth
 # or any train model in weights/
 
