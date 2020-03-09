@@ -613,15 +613,16 @@ class MultiBoxLoss(nn.Module):
             else:
                 pre_loss = F.smooth_l1_loss(pred_masks, mask_t, reduction='none')
 
-
-            if True:                                                ### surface_loss
+            ### my ###  adding the surface_loss (GAC_loss)
+            if True: 
                 pc = pred_masks.unsqueeze(0).permute(0,3,1,2) #[:, self.idc, ...].type(torch.float32)
                 dc = dist_maps_t.unsqueeze(0).permute(0,3,1,2) #[:, self.idc, ...].type(torch.float32)
                 # print(pc.shape)
                 # print(dc.shape)
                 multipled = torch.einsum("bcwh,bcwh->bcwh", pc, dc)
                 surface_loss = multipled.mean()
-
+            loss_ms += 1 * surface_loss
+            ### my ###
 
             if cfg.mask_proto_normalize_mask_loss_by_sqrt_area:
                 gt_area  = torch.sum(mask_t, dim=(0, 1), keepdim=True)
@@ -642,7 +643,6 @@ class MultiBoxLoss(nn.Module):
                 pre_loss *= old_num_pos / num_pos
 
             loss_m += torch.sum(pre_loss)
-            loss_ms += 1 * surface_loss
 
             if cfg.use_maskiou:
                 if cfg.discard_mask_area > 0:

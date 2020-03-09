@@ -31,9 +31,9 @@ import eval as eval_script
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
-
+### my ###
 from scipy.ndimage import distance_transform_edt as distance
-def one_hot2dist(seg: np.ndarray) -> np.ndarray:
+def one_hot2dist(seg: np.ndarray) -> np.ndarray:   ### create the distance maps from the segmenation
     # assert one_hot(torch.Tensor(seg), axis=0)
     C: int = len(seg)
 
@@ -48,6 +48,7 @@ def one_hot2dist(seg: np.ndarray) -> np.ndarray:
             res[c] = - distance(negmask) * negmask - (distance(posmask) - 1) * posmask
     return res
 
+    # adding the dist_maps to the data_loader
 def detection_collate2(batch):
     """Custom collate fn for dealing with batches of images that have a different
     number of associated object annotations (bounding boxes).
@@ -117,6 +118,7 @@ def enforce_size(img, targets, masks, num_crowds, dist_maps, new_w, new_h):
         dist_maps = F.pad(dist_maps, pad_dims, mode='constant', value=0)
 
         return img, targets, masks, num_crowds, dist_maps
+### my ###
 
 parser = argparse.ArgumentParser(
     description='Yolact Training Script')

@@ -407,7 +407,7 @@ def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, de
 
     with timer.env('Postprocess'):
         classes, scores, boxes, masks = postprocess(dets, w, h, crop_masks=args.crop, score_threshold=args.score_threshold)
-        ### my ###
+        ### my ###  adding refiement step using GAC
         if args.GAC:
             # import matplotlib.pyplot as plt
             # plt.imsave('out_my/img.png', img)
